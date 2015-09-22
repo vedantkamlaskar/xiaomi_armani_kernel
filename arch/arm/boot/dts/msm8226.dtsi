@@ -1070,7 +1070,8 @@
 			< 1344000 4066 >,
 			< 1401600 4066 >,
 			< 1497600 4066 >,
-			< 1593600 4066 >;
+			< 1593600 4066 >,
+			< 1689600 4066 >;
 	};
 
 	qcom,ocmem@fdd00000 {
@@ -1200,7 +1201,7 @@
 
 	qcom,msm-thermal {
 		compatible = "qcom,msm-thermal";
-		qcom,sensor-id = <0>;
+		qcom,sensor-id = <5>;
 		qcom,poll-ms = <250>;
 		qcom,limit-temp = <75>;
 		qcom,temp-hysteresis = <10>;
