@@ -2191,7 +2191,7 @@ struct ft5x06_data *ft5x06_probe(struct device *dev,
 		dev_err(dev, "fail to request interrupt\n");
 		goto err_free_phys;
 	}
-	data->irq_enabled = true;
+	ft5x06->irq_enabled = true;
 
 	/* export sysfs entries */
 	ft5x06->vkeys_dir = kobject_create_and_add("board_properties", NULL);
