@@ -185,6 +185,7 @@ struct ft5x06_data {
 	struct delayed_work noise_filter_delayed_work;
 	u8 chip_id;
 	u8 is_usb_plug_in;
+	bool irq_enabled;
 #if defined(CONFIG_FB)
 	struct notifier_block fb_notif;
 #elif defined(CONFIG_HAS_EARLYSUSPEND)
@@ -926,6 +927,24 @@ static irqreturn_t ft5x06_interrupt(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
+static void ft5x06_enable_irq(struct ft5x06_data *data) {
+	if (likely(!data->irq_enabled)){
+		enable_irq(data->irq);
+		data->irq_enabled=true;
+	}
+}
+
+static void ft5x06_disable_irq(struct ft5x06_data *data, bool nosync) {
+	if (likely(data->irq_enabled)){
+		if (nosync) {
+			disable_irq_nosync(data->irq);
+		} else {
+			disable_irq(data->irq);
+		}
+		data->irq_enabled=false;
+	}
+}
+
 int ft5x06_suspend(struct ft5x06_data *ft5x06)
 {
 	int error = 0;
@@ -952,7 +971,7 @@ int ft5x06_suspend(struct ft5x06_data *ft5x06)
 		mutex_unlock(&ft5x06->mutex);
 	} else {
 #endif
-	disable_irq(ft5x06->irq);
+	ft5x06_disable_irq(ft5x06, false);
 	mutex_lock(&ft5x06->mutex);
 	memset(ft5x06->tracker, 0, sizeof(ft5x06->tracker));
 
@@ -1008,7 +1027,7 @@ int ft5x06_resume(struct ft5x06_data *ft5x06)
 				NOISE_FILTER_DELAY);
 	ft5x06->in_suspend = false;
 	mutex_unlock(&ft5x06->mutex);
-	enable_irq(ft5x06->irq);
+	ft5x06_enable_irq(ft5x06);
 #ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
 	} // if (prevent_sleep)
 #endif
@@ -1454,7 +1473,7 @@ static ssize_t ft5x06_rawdata_show(struct device *dev,
 
 	mutex_lock(&ft5x06->mutex);
 
-	disable_irq_nosync(ft5x06->irq);
+	ft5x06_disable_irq(ft5x06, true);
 	error = ft5x06_enter_factory(ft5x06);
 	if (error < 0) {
 		dev_err(ft5x06->dev, "ERROR: Could not enter factory mode!\n");
@@ -1479,7 +1498,7 @@ static ssize_t ft5x06_rawdata_show(struct device *dev,
 		dev_err(ft5x06->dev, "ERROR: Could not enter work mode!\n");
 
 end:
-	enable_irq(ft5x06->irq);
+	ft5x06_enable_irq(ft5x06);
 	mutex_unlock(&ft5x06->mutex);
 	return num_read_chars;
 }
@@ -1498,7 +1517,7 @@ static ssize_t ft5x06_diffdata_show(struct device *dev,
 	int rx_num = pdata->rx_num;
 
 	mutex_lock(&ft5x06->mutex);
-	disable_irq_nosync(ft5x06->irq);
+	ft5x06_disable_irq(ft5x06, true);
 	error = ft5x06_enter_factory(ft5x06);
 	if (error < 0) {
 		dev_err(ft5x06->dev, "ERROR: Could not enter factory mode!\n");
@@ -1523,7 +1542,7 @@ static ssize_t ft5x06_diffdata_show(struct device *dev,
 		dev_err(ft5x06->dev, "ERROR: Could not enter work mode!\n");
 
 end:
-	enable_irq(ft5x06->irq);
+	ft5x06_enable_irq(ft5x06);
 	mutex_unlock(&ft5x06->mutex);
 	return num_read_chars;
 }
@@ -1600,7 +1619,7 @@ static ssize_t ft5x06_selftest_store(struct device *dev,
 
 	mutex_lock(&ft5x06->mutex);
 
-	disable_irq_nosync(ft5x06->irq);
+	ft5x06_disable_irq(ft5x06, true);
 	error = ft5x06_enter_factory(ft5x06);
 	if (error < 0) {
 		dev_err(ft5x06->dev, "ERROR: Could not enter factory mode!\n");
@@ -1614,7 +1633,7 @@ static ssize_t ft5x06_selftest_store(struct device *dev,
 		dev_err(ft5x06->dev, "ERROR: Could not enter work mode!\n");
 
 end:
-	enable_irq(ft5x06->irq);
+	ft5x06_enable_irq(ft5x06);
 	mutex_unlock(&ft5x06->mutex);
 	return count;
 }
@@ -2172,6 +2191,7 @@ struct ft5x06_data *ft5x06_probe(struct device *dev,
 		dev_err(dev, "fail to request interrupt\n");
 		goto err_free_phys;
 	}
+	data->irq_enabled = true;
 
 	/* export sysfs entries */
 	ft5x06->vkeys_dir = kobject_create_and_add("board_properties", NULL);
