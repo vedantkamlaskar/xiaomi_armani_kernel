@@ -31,7 +31,7 @@
 #define DEBUG 0
 
 #define ASMP_TAG "AutoSMP: "
-#define ASMP_STARTDELAY 20000
+#define ASMP_STARTDELAY 1000
 
 struct asmp_cpudata_t {
 	long long unsigned int times_hotplugged;
@@ -54,16 +54,16 @@ static struct asmp_param_struct {
 	.delay = 100,
 	.scroff_single_core = true,
 	.max_cpus = CONFIG_NR_CPUS,
-	.min_cpus = 1,
+	.min_cpus = 2,
 	.cpufreq_up = 99,
 	.cpufreq_down = 90,
 	.cycle_up = 1,
 	.cycle_down = 0,
 };
 
-static unsigned int cycle = 0, delay0 = 1;
+static unsigned int cycle = 0, delay0 = 0;
 static unsigned long delay_jif = 0;
-static int enabled __read_mostly = 1;
+static int enabled __read_mostly = 0;
 
 static void __cpuinit asmp_work_fn(struct work_struct *work) {
 	unsigned int cpu = 0, slow_cpu = 0;
