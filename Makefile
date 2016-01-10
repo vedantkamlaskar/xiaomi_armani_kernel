@@ -346,7 +346,12 @@ KALLSYMS	= scripts/kallsyms
 PERL		= perl
 CHECK		= sparse
 
-KERNEL_FLAGS	= -marm -mtune=cortex-a7 -mcpu=cortex-a7 -mfpu=neon-vfpv4 \
+# Try to always use GNU ld
+ifneq ($(wildcard $(CROSS_COMPILE)ld.bfd),)
+LD		= $(CROSS_COMPILE)ld.bfd
+endif
+
+KERNEL_FLAGS	= -pipe -DNDEBUG -marm -mtune=cortex-a7 -mcpu=cortex-a7 -mfpu=neon-vfpv4 \
                   -mvectorize-with-neon-quad -fgcse-after-reload -fgcse-sm \
                   -fgcse-las -ftree-loop-im -ftree-loop-ivcanon -fivopts \
                   -ftree-vectorize -fmodulo-sched -ffast-math \
