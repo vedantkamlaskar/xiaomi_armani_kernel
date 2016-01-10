@@ -84,13 +84,16 @@
 #endif
 
 #include "sched.h"
-#include "../workqueue_sched.h"
+#include "../workqueue_internal.h"
 #include "../smpboot.h"
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/sched.h>
 
 ATOMIC_NOTIFIER_HEAD(migration_notifier_head);
+#ifdef CONFIG_ANDROID_BG_SCAN_MEM
+RAW_NOTIFIER_HEAD(bgtsk_migration_notifier_head);
+#endif
 
 void start_bandwidth_timer(struct hrtimer *period_timer, ktime_t period)
 {
@@ -1803,7 +1806,6 @@ try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags)
 	unsigned long flags;
 	int cpu, src_cpu, success = 0;
 	int notify = 0;
-	struct migration_notify_data mnd;
 
 	smp_wmb();
 	raw_spin_lock_irqsave(&p->pi_lock, flags);
@@ -1881,32 +1883,30 @@ try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags)
 stat:
 	ttwu_stat(p, cpu, wake_flags);
 
-#ifndef CONFIG_UML
-	if (task_notify_on_migrate(p)) {
-                mnd.src_cpu = src_cpu;
-                mnd.dest_cpu = cpu;
-                mnd.load = pct_task_load(p);
-
-                /*
-                 * Call the migration notifier with mnd for foreground task
-                 * migrations as well as for wakeups if their load is above
-                 * sysctl_sched_wakeup_load_threshold. This would prompt the
-                 * cpu-boost to boost the CPU frequency on wake up of a heavy
-                 * weight foreground task
-                 */
-                if ((src_cpu != cpu) || (mnd.load >
-                                        sysctl_sched_wakeup_load_threshold))
-			notify = 1;
-        }
-#endif
-
+	if (src_cpu != cpu && task_notify_on_migrate(p))
+		notify = 1;
 out:
 	raw_spin_unlock_irqrestore(&p->pi_lock, flags);
 
-	if (notify)
-		atomic_notifier_call_chain(&migration_notifier_head,
-                                           0, (void *)&mnd);
+	if (task_notify_on_migrate(p)) {
+		struct migration_notify_data mnd;
 
+		mnd.src_cpu = src_cpu;
+		mnd.dest_cpu = cpu;
+		mnd.load = pct_task_load(p);
+
+		/*
+		 * Call the migration notifier with mnd for foreground task
+		 * migrations as well as for wakeups if their load is above
+		 * sysctl_sched_wakeup_load_threshold. This would prompt the
+		 * cpu-boost to boost the CPU frequency on wake up of a heavy
+		 * weight foreground task
+		 */
+		if ((src_cpu != cpu) || (mnd.load >
+					sysctl_sched_wakeup_load_threshold))
+			atomic_notifier_call_chain(&migration_notifier_head,
+					   0, (void *)&mnd);
+	}
 	return success;
 }
 
@@ -1922,9 +1922,12 @@ static void try_to_wake_up_local(struct task_struct *p)
 {
 	struct rq *rq = task_rq(p);
 
-	if (WARN_ON(rq != this_rq()) ||
-	    WARN_ON(p == current))
+	if (rq != this_rq() || p == current) {
+		printk_sched("%s: Failed to wakeup task %d (%s), rq = %p, this_rq = %p, p = %p, current = %p\n",
+			__func__, task_pid_nr(p), p->comm, rq,
+			this_rq(), p, current);
 		return;
+	}
 
 	lockdep_assert_held(&rq->lock);
 
@@ -2432,6 +2435,35 @@ unsigned long nr_iowait(void)
 }
 
 #if defined(CONFIG_INTELLI_HOTPLUG) || defined(CONFIG_MSM_RUN_QUEUE_STATS_BE_CONSERVATIVE)
+unsigned long avg_nr_running(void)
+{
+	unsigned long i, sum = 0;
+	unsigned int seqcnt, ave_nr_running;
+
+	for_each_online_cpu(i) {
+		struct nr_stats_s *stats = &per_cpu(runqueue_stats, i);
+		struct rq *q = cpu_rq(i);
+
+		/*
+		 * Update average to avoid reading stalled value if there were
+		 * no run-queue changes for a long time. On the other hand if
+		 * the changes are happening right now, just read current value
+		 * directly.
+		 */
+		seqcnt = read_seqcount_begin(&stats->ave_seqcnt);
+		ave_nr_running = do_avg_nr_running(q);
+		if (read_seqcount_retry(&stats->ave_seqcnt, seqcnt)) {
+			read_seqcount_begin(&stats->ave_seqcnt);
+			ave_nr_running = stats->ave_nr_running;
+		}
+
+		sum += ave_nr_running;
+	}
+
+	return sum;
+}
+EXPORT_SYMBOL(avg_nr_running);
+
 unsigned long avg_cpu_nr_running(unsigned int cpu)
 {
 	unsigned int seqcnt, ave_nr_running;
@@ -5263,7 +5295,7 @@ void show_state_filter(unsigned long state_filter)
 
 	touch_all_softlockup_watchdogs();
 
-#ifdef CONFIG_SCHED_DEBUG
+#ifdef CONFIG_SYSRQ_SCHED_DEBUG
 	sysrq_sched_debug_show();
 #endif
 	rcu_read_unlock();
@@ -5628,16 +5660,25 @@ static void sd_free_ctl_entry(struct ctl_table **tablep)
 	*tablep = NULL;
 }
 
+static int min_load_idx = 0;
+static int max_load_idx = CPU_LOAD_IDX_MAX-1;
+
 static void
 set_table_entry(struct ctl_table *entry,
 		const char *procname, void *data, int maxlen,
-		umode_t mode, proc_handler *proc_handler)
+		umode_t mode, proc_handler *proc_handler,
+		bool load_idx)
 {
 	entry->procname = procname;
 	entry->data = data;
 	entry->maxlen = maxlen;
 	entry->mode = mode;
 	entry->proc_handler = proc_handler;
+
+	if (load_idx) {
+		entry->extra1 = &min_load_idx;
+		entry->extra2 = &max_load_idx;
+	}
 }
 
 static struct ctl_table *
@@ -5649,30 +5690,30 @@ sd_alloc_ctl_domain_table(struct sched_domain *sd)
 		return NULL;
 
 	set_table_entry(&table[0], "min_interval", &sd->min_interval,
-		sizeof(long), 0644, proc_doulongvec_minmax);
+		sizeof(long), 0644, proc_doulongvec_minmax, false);
 	set_table_entry(&table[1], "max_interval", &sd->max_interval,
-		sizeof(long), 0644, proc_doulongvec_minmax);
+		sizeof(long), 0644, proc_doulongvec_minmax, false);
 	set_table_entry(&table[2], "busy_idx", &sd->busy_idx,
-		sizeof(int), 0644, proc_dointvec_minmax);
+		sizeof(int), 0644, proc_dointvec_minmax, true);
 	set_table_entry(&table[3], "idle_idx", &sd->idle_idx,
-		sizeof(int), 0644, proc_dointvec_minmax);
+		sizeof(int), 0644, proc_dointvec_minmax, true);
 	set_table_entry(&table[4], "newidle_idx", &sd->newidle_idx,
-		sizeof(int), 0644, proc_dointvec_minmax);
+		sizeof(int), 0644, proc_dointvec_minmax, true);
 	set_table_entry(&table[5], "wake_idx", &sd->wake_idx,
-		sizeof(int), 0644, proc_dointvec_minmax);
+		sizeof(int), 0644, proc_dointvec_minmax, true);
 	set_table_entry(&table[6], "forkexec_idx", &sd->forkexec_idx,
-		sizeof(int), 0644, proc_dointvec_minmax);
+		sizeof(int), 0644, proc_dointvec_minmax, true);
 	set_table_entry(&table[7], "busy_factor", &sd->busy_factor,
-		sizeof(int), 0644, proc_dointvec_minmax);
+		sizeof(int), 0644, proc_dointvec_minmax, false);
 	set_table_entry(&table[8], "imbalance_pct", &sd->imbalance_pct,
-		sizeof(int), 0644, proc_dointvec_minmax);
+		sizeof(int), 0644, proc_dointvec_minmax, false);
 	set_table_entry(&table[9], "cache_nice_tries",
 		&sd->cache_nice_tries,
-		sizeof(int), 0644, proc_dointvec_minmax);
+		sizeof(int), 0644, proc_dointvec_minmax, false);
 	set_table_entry(&table[10], "flags", &sd->flags,
-		sizeof(int), 0644, proc_dointvec_minmax);
+		sizeof(int), 0644, proc_dointvec_minmax, false);
 	set_table_entry(&table[11], "name", sd->name,
-		CORENAME_MAX_SIZE, 0444, proc_dostring);
+		CORENAME_MAX_SIZE, 0444, proc_dostring, false);
 	/* &table[12] is terminator */
 
 	return table;
@@ -5842,7 +5883,6 @@ static int __cpuinit sched_cpu_active(struct notifier_block *nfb,
 				      unsigned long action, void *hcpu)
 {
 	switch (action & ~CPU_TASKS_FROZEN) {
-	case CPU_STARTING:
 	case CPU_DOWN_FAILED:
 		set_cpu_active((long)hcpu, true);
 		return NOTIFY_OK;
@@ -6217,18 +6257,23 @@ static void destroy_sched_domains(struct sched_domain *sd, int cpu)
  * two cpus are in the same cache domain, see cpus_share_cache().
  */
 DEFINE_PER_CPU(struct sched_domain *, sd_llc);
+DEFINE_PER_CPU(int, sd_llc_size);
 DEFINE_PER_CPU(int, sd_llc_id);
 
 static void update_top_cache_domain(int cpu)
 {
 	struct sched_domain *sd;
 	int id = cpu;
+	int size = 1;
 
 	sd = highest_flag_domain(cpu, SD_SHARE_PKG_RESOURCES);
-	if (sd)
+	if (sd) {
 		id = cpumask_first(sched_domain_span(sd));
+		size = cpumask_weight(sched_domain_span(sd));
+	}
 
 	rcu_assign_pointer(per_cpu(sd_llc, cpu), sd);
+	per_cpu(sd_llc_size, cpu) = size;
 	per_cpu(sd_llc_id, cpu) = id;
 }
 
@@ -6527,12 +6572,12 @@ build_sched_groups(struct sched_domain *sd, int cpu)
 
 	for_each_cpu(i, span) {
 		struct sched_group *sg;
-		int group = get_group(i, sdd, &sg);
-		int j;
+		int group, j;
 
 		if (cpumask_test_cpu(i, covered))
 			continue;
 
+		group = get_group(i, sdd, &sg);
 		cpumask_clear(sched_group_cpus(sg));
 		sg->sgp->power = 0;
 
@@ -7160,9 +7205,6 @@ void __init sched_init_smp(void)
 
 	hotcpu_notifier(cpuset_cpu_active, CPU_PRI_CPUSET_ACTIVE);
 	hotcpu_notifier(cpuset_cpu_inactive, CPU_PRI_CPUSET_INACTIVE);
-
-	/* RT runtime code needs to handle some hotplug events */
-	hotcpu_notifier(update_runtime, 0);
 
 	init_hrtick();
 
@@ -8087,8 +8129,14 @@ static void cpu_cgroup_attach(struct cgroup *cgrp,
 {
 	struct task_struct *task;
 
-	cgroup_taskset_for_each(task, cgrp, tset)
+	cgroup_taskset_for_each(task, cgrp, tset) {
 		sched_move_task(task);
+#ifdef CONFIG_ANDROID_BG_SCAN_MEM
+		if (task_notify_on_migrate(task) && thread_group_leader(task))
+			raw_notifier_call_chain(&bgtsk_migration_notifier_head,
+						0, NULL);
+#endif
+	}
 }
 
 static void
