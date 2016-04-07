@@ -1438,7 +1438,7 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 	}
 
 	/* calculate the scaled load across CPU */
-	load_at_max_freq = (cur_load * policy->cur)/policy->cpuinfo.max_freq;
+	load_at_max_freq = (cur_load * policy->cur)/policy->max;
 
 /* PATCH : SMART_UP */
 	if (dbs_tuners_ins.smart_up && ( core_j + 1 ) > dbs_tuners_ins.smart_each_off ){
@@ -1918,7 +1918,7 @@ static int dbs_sync_thread(void *data)
 	this_dbs_info = &per_cpu(id_cpu_dbs_info, cpu);
 
 	while (1) {
-		wait_event(this_dbs_info->sync_wq,
+		wait_event_interruptible(this_dbs_info->sync_wq,
 			   sync_pending(this_dbs_info) ||
 			   kthread_should_stop());
 
