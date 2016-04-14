@@ -425,7 +425,7 @@ config ZPOOL
 	  zsmalloc.
 
 config ZSMALLOC
-	bool "Memory allocator for compressed pages"
+	tristate "Memory allocator for compressed pages"
 	depends on MMU
 	default n
 	help
@@ -445,3 +445,5 @@ config ZSMALLOC_STAT
 	  statistics about whats happening in zsmalloc and exports that
 	  information to userspace via debugfs.
 	  If unsure, say N.
+=======
+>>>>>>> a2fbcc7... mm: Backport ZRAM/ZSMALLOC from Google kernel
