@@ -176,6 +176,24 @@ static void __init msm8226_early_memory(void)
 	of_scan_flat_dt(dt_scan_for_memory_hole, msm8226_reserve_table);
 }
 
+static struct msm_thermal_data msm_thermal_pdata = {
+	.sensor_id = 5,
+	.poll_ms = 250,
+	.shutdown_temp = 80,
+
+	.allowed_max_high = 67,
+	.allowed_max_low = 60,
+	.allowed_max_freq = 787200,
+
+	.allowed_mid_high = 60,
+	.allowed_mid_low = 55,
+	.allowed_mid_freq = 1190400,
+
+	.allowed_low_high = 55,
+	.allowed_low_low = 47,
+	.allowed_low_freq = 1401600,
+};
+
 static void __init msm8226_reserve(void)
 {
 #ifdef CONFIG_KEXEC_HARDBOOT
@@ -233,7 +251,7 @@ void __init msm8226_add_drivers(void)
 	fan53555_regulator_init();
 	cpr_regulator_init();
 	tsens_tm_init_driver();
-	msm_thermal_device_init();
+	msm_thermal_init(&msm_thermal_pdata);
 #ifdef CONFIG_ANDROID_RAM_CONSOLE
 	ram_console_debug_init();
 #endif
