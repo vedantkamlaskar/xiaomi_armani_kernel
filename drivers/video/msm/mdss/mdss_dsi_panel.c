@@ -31,6 +31,8 @@
 
 DEFINE_LED_TRIGGER(bl_led_trigger);
 
+bool mdss_screen_on = true;
+
 void mdss_dsi_panel_pwm_cfg(struct mdss_dsi_ctrl_pdata *ctrl)
 {
 	ctrl->pwm_bl = pwm_request(ctrl->pwm_lpg_chan, "lcd-bklt");
@@ -423,6 +425,7 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 		return -EINVAL;
 	}
 
+	mdss_screen_on = true;
 	ctrl = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 				panel_data);
 	mipi  = &pdata->panel_info.mipi;
@@ -436,11 +439,11 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 	if (ctrl->on_cmds.cmd_cnt)
 		mdss_dsi_panel_cmds_send(ctrl, &ctrl->on_cmds);
 
-	pr_debug("%s:-\n", __func__);
-
 #ifdef CONFIG_LCD_NOTIFY
 	lcd_notifier_call_chain(LCD_EVENT_ON_END);
 #endif
+
+	pr_debug("%s:-\n", __func__);
 
 	return 0;
 }
@@ -469,11 +472,13 @@ static int mdss_dsi_panel_off(struct mdss_panel_data *pdata)
 	if (ctrl->off_cmds.cmd_cnt)
 		mdss_dsi_panel_cmds_send(ctrl, &ctrl->off_cmds);
 
-	pr_debug("%s:-\n", __func__);
-
 #ifdef CONFIG_LCD_NOTIFY
 	lcd_notifier_call_chain(LCD_EVENT_OFF_END);
 #endif
+
+	mdss_screen_on = false;
+
+	pr_debug("%s:-\n", __func__);
 
 	return 0;
 }
