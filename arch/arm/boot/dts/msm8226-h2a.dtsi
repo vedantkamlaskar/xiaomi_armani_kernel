@@ -204,6 +204,10 @@
 
 };
 
+&msm_gpu {
+	qcom,l2pc-cpu-mask = <0x0000000F>;
+};
+
 &usb_otg {
 	#address-cells = <0>;
         interrupt-parent = <&usb_otg>;
