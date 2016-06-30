@@ -1,8 +1,7 @@
 /*
- * Author: Paul Reioux aka Faux123 <reioux@gmail.com>
+ * Dynamic File Synchronization
  *
  * Copyright 2013 Paul Reioux
- * Copyright 2012 Paul Reioux
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -18,14 +17,14 @@
 #include <linux/module.h>
 #include <linux/kobject.h>
 #include <linux/sysfs.h>
-#include <linux/lcd_notify.h>
+#include <linux/state_notifier.h>
 #include <linux/mutex.h>
 #include <linux/notifier.h>
 #include <linux/reboot.h>
 #include <linux/writeback.h>
 
-#define DYN_FSYNC_VERSION_MAJOR 1
-#define DYN_FSYNC_VERSION_MINOR 5
+#define DYN_FSYNC_VERSION_MAJOR 2
+#define DYN_FSYNC_VERSION_MINOR 0
 
 /*
  * fsync_mutex protects dyn_fsync_active during power suspend / late resume
@@ -36,7 +35,7 @@ static DEFINE_MUTEX(fsync_mutex);
 static struct notifier_block dfnotif;
 
 bool power_suspend_active __read_mostly = false;
-bool dyn_fsync_active __read_mostly = true;
+bool dyn_fsync_active __read_mostly = false;
 
 static ssize_t dyn_fsync_active_show(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
@@ -49,16 +48,14 @@ static ssize_t dyn_fsync_active_store(struct kobject *kobj,
 {
 	unsigned int data;
 
-	if(sscanf(buf, "%u\n", &data) == 1) {
+	if (sscanf(buf, "%u\n", &data) == 1) {
 		if (data == 1) {
 			pr_info("%s: dynamic fsync enabled\n", __FUNCTION__);
 			dyn_fsync_active = true;
-		}
-		else if (data == 0) {
+		} else if (data == 0) {
 			pr_info("%s: dyanamic fsync disabled\n", __FUNCTION__);
 			dyn_fsync_active = false;
-		}
-		else
+		} else
 			pr_info("%s: bad value: %u\n", __FUNCTION__, data);
 	} else
 		pr_info("%s: unknown input!\n", __FUNCTION__);
@@ -80,29 +77,29 @@ static ssize_t dyn_fsync_powersuspend_show(struct kobject *kobj,
 	return sprintf(buf, "power suspend active: %u\n", power_suspend_active);
 }
 
-static struct kobj_attribute dyn_fsync_active_attribute = 
+static struct kobj_attribute dyn_fsync_active_attribute =
 	__ATTR(Dyn_fsync_active, 0666,
 		dyn_fsync_active_show,
 		dyn_fsync_active_store);
 
-static struct kobj_attribute dyn_fsync_version_attribute = 
+static struct kobj_attribute dyn_fsync_version_attribute =
 	__ATTR(Dyn_fsync_version, 0444, dyn_fsync_version_show, NULL);
 
-static struct kobj_attribute dyn_fsync_powersuspend_attribute = 
+static struct kobj_attribute dyn_fsync_powersuspend_attribute =
 	__ATTR(Dyn_fsync_earlysuspend, 0444, dyn_fsync_powersuspend_show, NULL);
 
 static struct attribute *dyn_fsync_active_attrs[] =
-	{
-		&dyn_fsync_active_attribute.attr,
-		&dyn_fsync_version_attribute.attr,
-		&dyn_fsync_powersuspend_attribute.attr,
-		NULL,
-	};
+{
+	&dyn_fsync_active_attribute.attr,
+	&dyn_fsync_version_attribute.attr,
+	&dyn_fsync_powersuspend_attribute.attr,
+	NULL,
+};
 
 static struct attribute_group dyn_fsync_active_attr_group =
-	{
-		.attrs = dyn_fsync_active_attrs,
-	};
+{
+	.attrs = dyn_fsync_active_attrs,
+};
 
 static struct kobject *dyn_fsync_kobj;
 
@@ -126,19 +123,19 @@ static void dyn_fsync_resume(void)
 	power_suspend_active = false;
 }
 
-static int lcd_notifier_callback(struct notifier_block *this,
+static int state_notifier_callback(struct notifier_block *this,
 				unsigned long event, void *data)
 {
 	mutex_lock(&fsync_mutex);
 
 	switch (event) {
-	case LCD_EVENT_ON_START:
+		case STATE_NOTIFIER_ACTIVE:
 			dyn_fsync_resume();
 			break;
-	case LCD_EVENT_OFF_END:
+		case STATE_NOTIFIER_SUSPEND:
 			dyn_fsync_suspend();
 			break;
-	default:
+		default:
 			break;
 	}
 
@@ -152,12 +149,12 @@ static int dyn_fsync_panic_event(struct notifier_block *this,
 {
 	power_suspend_active = true;
 	dyn_fsync_force_flush();
-	//pr_warn("dyn fsync: panic: force flush!\n");
 
 	return NOTIFY_DONE;
 }
 
-static struct notifier_block dyn_fsync_panic_block = {
+static struct notifier_block dyn_fsync_panic_block =
+{
 	.notifier_call  = dyn_fsync_panic_event,
 	.priority       = INT_MAX,
 };
@@ -168,8 +165,8 @@ static int dyn_fsync_notify_sys(struct notifier_block *this, unsigned long code,
 	if (code == SYS_DOWN || code == SYS_HALT) {
 		power_suspend_active = true;
 		dyn_fsync_force_flush();
-		//pr_warn("dyn fsync: reboot: force flush!\n");
 	}
+
 	return NOTIFY_DONE;
 }
 
@@ -181,8 +178,8 @@ static int dyn_fsync_init(void)
 {
 	int sysfs_result;
 
-	dfnotif.notifier_call = lcd_notifier_callback;
-	if (lcd_register_client(&dfnotif))
+	dfnotif.notifier_call = state_notifier_callback;
+	if (state_register_client(&dfnotif))
 		return -EINVAL;
 
 	register_reboot_notifier(&dyn_fsync_notifier);
@@ -202,12 +199,13 @@ static int dyn_fsync_init(void)
 		pr_info("%s dyn_fsync sysfs create failed!\n", __FUNCTION__);
 		kobject_put(dyn_fsync_kobj);
 	}
+
 	return sysfs_result;
 }
 
 static void dyn_fsync_exit(void)
 {
-	lcd_unregister_client(&dfnotif);
+	state_unregister_client(&dfnotif);
 	unregister_reboot_notifier(&dyn_fsync_notifier);
 	atomic_notifier_chain_unregister(&panic_notifier_list,
 		&dyn_fsync_panic_block);
@@ -215,7 +213,6 @@ static void dyn_fsync_exit(void)
 	if (dyn_fsync_kobj != NULL)
 		kobject_put(dyn_fsync_kobj);
 }
-
 module_init(dyn_fsync_init);
 module_exit(dyn_fsync_exit);
 
