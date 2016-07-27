@@ -54,7 +54,7 @@
 			compatible = "ft,ft5x06_i2c";
 			reg = <0x38>;
 			interrupt-parent = <&msmgpio>;
-			interrupts = <17 0x2>;
+			interupts = <17 0x2>;
 			vdd-supply = <&pm8226_l19>;
 			vcc_i2c-supply = <&pm8226_lvs1>;
 			ft5x06_i2c,i2c-pull-up;
@@ -300,10 +300,8 @@
 	#interrupt-cells = <1>;
 	interrupt-map-mask = <0xffffffff>;
 	interrupt-map = <0 &intc 0 125 0
-			1 &intc 0 220 0
-			2 &msmgpio 38 0x3>;
-	interrupt-names = "core_irq", "bam_irq", "status_irq";
-	cd-gpios = <&msmgpio 38 0x1>;
+			1 &intc 0 220 0>;
+	interrupt-names = "core_irq", "bam_irq";
 
 	status = "disabled";
 };
@@ -330,10 +328,8 @@
 	#interrupt-cells = <1>;
 	interrupt-map-mask = <0xffffffff>;
 	interrupt-map = <0 &intc 0 125 0
-			1 &intc 0 221 0
-			2 &msmgpio 38 0x3>;
-	interrupt-names = "hc_irq", "pwr_irq", "status_irq";
-	cd-gpios = <&msmgpio 38 0x1>;
+			1 &intc 0 221 0>;
+	interrupt-names = "hc_irq", "pwr_irq";
 
 	status = "ok";
 };
