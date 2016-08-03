@@ -12,6 +12,8 @@
 #define I2C_SEQ_REG_DATA_MAX      20
 #define MAX_CID                   16
 
+#define I2C_USER_REG_DATA_MAX 1024
+
 #define MSM_SENSOR_MCLK_8HZ   8000000
 #define MSM_SENSOR_MCLK_16HZ  16000000
 #define MSM_SENSOR_MCLK_24HZ  24000000
@@ -52,6 +54,12 @@
 
 #define MAX_AF_ITERATIONS 3
 #define MAX_NUMBER_OF_STEPS 47
+#define MAX_POWER_CONFIG 12
+
+typedef enum sensor_stats_type {
+	YRGB,
+	YYYY,
+} sensor_stats_type_t;
 
 typedef enum sensor_stats_type {
 	YRGB,
@@ -491,6 +499,8 @@ enum msm_actuator_cfg_type_t {
 	CFG_SET_DEFAULT_FOCUS,
 	CFG_MOVE_FOCUS,
 	CFG_SET_POSITION,
+	CFG_ACTUATOR_POWERDOWN,
+	CFG_ACTUATOR_POWERUP,
 };
 
 enum actuator_type {
@@ -668,10 +678,10 @@ struct sensor_init_cfg_data {
 	_IOWR('V', BASE_VIDIOC_PRIVATE + 3, uint32_t)
 
 #define VIDIOC_MSM_CSIPHY_IO_CFG \
-	_IOWR('V', BASE_VIDIOC_PRIVATE + 4, struct csid_cfg_data)
+	_IOWR('V', BASE_VIDIOC_PRIVATE + 4, struct csiphy_cfg_data)
 
 #define VIDIOC_MSM_CSID_IO_CFG \
-	_IOWR('V', BASE_VIDIOC_PRIVATE + 5, struct csiphy_cfg_data)
+	_IOWR('V', BASE_VIDIOC_PRIVATE + 5, struct csid_cfg_data)
 
 #define VIDIOC_MSM_ACTUATOR_CFG \
 	_IOWR('V', BASE_VIDIOC_PRIVATE + 6, struct msm_actuator_cfg_data)

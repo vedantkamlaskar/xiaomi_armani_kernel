@@ -315,7 +315,6 @@ static int32_t msm_sensor_validate_slave_info(
 	return 0;
 }
 
-extern int h3lte_get_front_sensor_name(char*);
 /* static function definition */
 int32_t msm_sensor_driver_probe(void *setting)
 {
@@ -331,7 +330,6 @@ int32_t msm_sensor_driver_probe(void *setting)
 	int c, end;
 	struct msm_sensor_power_setting     power_down_setting_t;
 	unsigned long mount_pos = 0;
-	char h3lte_sensor_name[32];
 
 	/* Validate input parameters */
 	if (!setting) {
@@ -381,6 +379,13 @@ int32_t msm_sensor_driver_probe(void *setting)
 			slave_info->sensor_init_params.sensor_mount_angle);
 	}
 
+	if (slave_info->is_init_params_valid) {
+		CDBG("position %d",
+			slave_info->sensor_init_params.position);
+		CDBG("mount %d",
+			slave_info->sensor_init_params.sensor_mount_angle);
+	}
+
 	/* Validate camera id */
 	if (slave_info->camera_id >= MAX_CAMERAS) {
 		pr_err("failed: invalid camera id %d max %d",
@@ -412,6 +417,13 @@ int32_t msm_sensor_driver_probe(void *setting)
 	}
 
 	size = slave_info->power_setting_array.size;
+	/* Validate size */
+	if (size > MAX_POWER_CONFIG) {
+		pr_err("failed: invalid number of power_up_setting %d\n", size);
+		rc = -EINVAL;
+		goto FREE_SLAVE_INFO;
+	}
+
 	/* Allocate memory for power up setting */
 	power_setting = kzalloc(sizeof(*power_setting) * size, GFP_KERNEL);
 	if (!power_setting) {
@@ -438,6 +450,12 @@ int32_t msm_sensor_driver_probe(void *setting)
 	size_down = slave_info->power_setting_array.size_down;
 	if (!size_down)
 		size_down = size;
+	/* Validate size_down */
+	if (size_down > MAX_POWER_CONFIG) {
+		pr_err("failed: invalid size_down %d", size_down);
+		rc = -EINVAL;
+		goto FREE_POWER_SETTING;
+	}
 	/* Allocate memory for power down setting */
 	power_down_setting =
 		kzalloc(sizeof(*power_setting) * size_down, GFP_KERNEL);
@@ -808,7 +826,6 @@ static int32_t msm_sensor_driver_get_dt_data(struct msm_sensor_ctrl_t *s_ctrl)
 	if (rc < 0) {
 		pr_err("%s:%d Invalid sensor position\n", __func__, __LINE__);
 		sensordata->sensor_info->position = INVALID_CAMERA_B;
-		rc = 0;
 	}
 
 	rc = of_property_read_u32(of_node, "qcom,sensor-mode",
