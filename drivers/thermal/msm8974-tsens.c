@@ -1,4 +1,5 @@
-/* Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
+/*
+ * Copyright (c) 2016, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -8,7 +9,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
  */
 
 #define pr_fmt(fmt) "%s: " fmt, __func__
@@ -445,14 +445,14 @@ static int tsens_tz_get_trip_type(struct thermal_zone_device *thermal,
 		return -EINVAL;
 
 	switch (trip) {
-	case TSENS_TRIP_WARM:
-		*type = THERMAL_TRIP_CONFIGURABLE_HI;
-		break;
-	case TSENS_TRIP_COOL:
-		*type = THERMAL_TRIP_CONFIGURABLE_LOW;
-		break;
-	default:
-		return -EINVAL;
+		case TSENS_TRIP_WARM:
+			*type = THERMAL_TRIP_CONFIGURABLE_HI;
+			break;
+		case TSENS_TRIP_COOL:
+			*type = THERMAL_TRIP_CONFIGURABLE_LOW;
+			break;
+		default:
+			return -EINVAL;
 	}
 
 	return 0;
@@ -475,24 +475,24 @@ static int tsens_tz_activate_trip_type(struct thermal_zone_device *thermal,
 					(tm_sensor->sensor_hw_num *
 					TSENS_SN_ADDR_OFFSET)));
 	switch (trip) {
-	case TSENS_TRIP_WARM:
-		code = (reg_cntl & TSENS_UPPER_THRESHOLD_MASK)
-					>> TSENS_UPPER_THRESHOLD_SHIFT;
-		mask = TSENS_UPPER_STATUS_CLR;
+		case TSENS_TRIP_WARM:
+			code = (reg_cntl & TSENS_UPPER_THRESHOLD_MASK)
+						>> TSENS_UPPER_THRESHOLD_SHIFT;
+			mask = TSENS_UPPER_STATUS_CLR;
 
-		if (!(reg_cntl & TSENS_LOWER_STATUS_CLR))
-			lo_code = (reg_cntl & TSENS_LOWER_THRESHOLD_MASK);
-		break;
-	case TSENS_TRIP_COOL:
-		code = (reg_cntl & TSENS_LOWER_THRESHOLD_MASK);
-		mask = TSENS_LOWER_STATUS_CLR;
+			if (!(reg_cntl & TSENS_LOWER_STATUS_CLR))
+				lo_code = (reg_cntl & TSENS_LOWER_THRESHOLD_MASK);
+			break;
+		case TSENS_TRIP_COOL:
+			code = (reg_cntl & TSENS_LOWER_THRESHOLD_MASK);
+			mask = TSENS_LOWER_STATUS_CLR;
 
-		if (!(reg_cntl & TSENS_UPPER_STATUS_CLR))
-			hi_code = (reg_cntl & TSENS_UPPER_THRESHOLD_MASK)
-					>> TSENS_UPPER_THRESHOLD_SHIFT;
-		break;
-	default:
-		return -EINVAL;
+			if (!(reg_cntl & TSENS_UPPER_STATUS_CLR))
+				hi_code = (reg_cntl & TSENS_UPPER_THRESHOLD_MASK)
+						>> TSENS_UPPER_THRESHOLD_SHIFT;
+			break;
+		default:
+			return -EINVAL;
 	}
 
 	if (mode == THERMAL_TRIP_ACTIVATION_DISABLED)
@@ -527,15 +527,15 @@ static int tsens_tz_get_trip_temp(struct thermal_zone_device *thermal,
 						(tmdev->tsens_addr) +
 			(tm_sensor->sensor_hw_num * TSENS_SN_ADDR_OFFSET));
 	switch (trip) {
-	case TSENS_TRIP_WARM:
-		reg = (reg & TSENS_UPPER_THRESHOLD_MASK) >>
-				TSENS_UPPER_THRESHOLD_SHIFT;
-		break;
-	case TSENS_TRIP_COOL:
-		reg = (reg & TSENS_LOWER_THRESHOLD_MASK);
-		break;
-	default:
-		return -EINVAL;
+		case TSENS_TRIP_WARM:
+			reg = (reg & TSENS_UPPER_THRESHOLD_MASK) >>
+					TSENS_UPPER_THRESHOLD_SHIFT;
+			break;
+		case TSENS_TRIP_COOL:
+			reg = (reg & TSENS_LOWER_THRESHOLD_MASK);
+			break;
+		default:
+			return -EINVAL;
 	}
 
 	rc = tsens_get_sw_id_mapping(tm_sensor->sensor_hw_num, &sensor_sw_id);
@@ -583,20 +583,20 @@ static int tsens_tz_set_trip_temp(struct thermal_zone_device *thermal,
 			(tmdev->tsens_addr) + (tm_sensor->sensor_hw_num *
 					TSENS_SN_ADDR_OFFSET));
 	switch (trip) {
-	case TSENS_TRIP_WARM:
-		code <<= TSENS_UPPER_THRESHOLD_SHIFT;
-		reg_cntl &= ~TSENS_UPPER_THRESHOLD_MASK;
-		if (!(reg_cntl & TSENS_LOWER_STATUS_CLR))
-			lo_code = (reg_cntl & TSENS_LOWER_THRESHOLD_MASK);
-		break;
-	case TSENS_TRIP_COOL:
-		reg_cntl &= ~TSENS_LOWER_THRESHOLD_MASK;
-		if (!(reg_cntl & TSENS_UPPER_STATUS_CLR))
-			hi_code = (reg_cntl & TSENS_UPPER_THRESHOLD_MASK)
-					>> TSENS_UPPER_THRESHOLD_SHIFT;
-		break;
-	default:
-		return -EINVAL;
+		case TSENS_TRIP_WARM:
+			code <<= TSENS_UPPER_THRESHOLD_SHIFT;
+			reg_cntl &= ~TSENS_UPPER_THRESHOLD_MASK;
+			if (!(reg_cntl & TSENS_LOWER_STATUS_CLR))
+				lo_code = (reg_cntl & TSENS_LOWER_THRESHOLD_MASK);
+			break;
+		case TSENS_TRIP_COOL:
+			reg_cntl &= ~TSENS_LOWER_THRESHOLD_MASK;
+			if (!(reg_cntl & TSENS_UPPER_STATUS_CLR))
+				hi_code = (reg_cntl & TSENS_UPPER_THRESHOLD_MASK)
+						>> TSENS_UPPER_THRESHOLD_SHIFT;
+			break;
+		default:
+			return -EINVAL;
 	}
 
 	if (code_err_chk < lo_code || code_err_chk > hi_code)
@@ -1562,6 +1562,7 @@ static int __devinit tsens_tm_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, tmdev);
 
 	return 0;
+
 fail:
 	if (tmdev->tsens_wq)
 		destroy_workqueue(tmdev->tsens_wq);
@@ -1623,6 +1624,7 @@ static int __devinit _tsens_register_thermal(void)
 	INIT_WORK(&tmdev->tsens_work, tsens_scheduler_fn);
 
 	return 0;
+
 fail:
 	if (tmdev->tsens_calib_addr)
 		iounmap(tmdev->tsens_calib_addr);
@@ -1662,8 +1664,7 @@ static int __devexit tsens_tm_remove(struct platform_device *pdev)
 }
 
 static struct of_device_id tsens_match[] = {
-	{	.compatible = "qcom,msm-tsens",
-	},
+	{ .compatible = "qcom,msm-tsens", },
 	{}
 };
 

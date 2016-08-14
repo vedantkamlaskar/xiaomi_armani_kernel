@@ -55,7 +55,6 @@
 #include <mach/rpm-smd.h>
 #include <mach/rpm-regulator-smd.h>
 #include <mach/msm_smem.h>
-#include <linux/msm_thermal.h>
 #include "board-dt.h"
 #include "clock.h"
 #include "platsmp.h"
@@ -233,7 +232,6 @@ void __init msm8226_add_drivers(void)
 	fan53555_regulator_init();
 	cpr_regulator_init();
 	tsens_tm_init_driver();
-	msm_thermal_device_init();
 #ifdef CONFIG_ANDROID_RAM_CONSOLE
 	ram_console_debug_init();
 #endif

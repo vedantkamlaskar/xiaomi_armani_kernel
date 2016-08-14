@@ -1,4 +1,5 @@
-/* Copyright (c) 2013, The Linux Foundation. All rights reserved.
+/*
+ * Copyright (c) 2016, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -10,7 +11,6 @@
  * GNU General Public License for more details.
  *
  */
-
 #include <linux/kernel.h>
 #include <linux/fs.h>
 #include <linux/types.h>
@@ -86,19 +86,19 @@ static long validate_and_copy(unsigned int *cmd, unsigned long *arg,
 	}
 
 	switch (*cmd) {
-	case MSM_THERMAL_SET_CPU_MAX_FREQUENCY:
-	case MSM_THERMAL_SET_CPU_MIN_FREQUENCY:
-		if (query->cpu_freq.cpu_num >= num_possible_cpus()) {
-			pr_err("%s: Invalid CPU number: %u\n", __func__,
-				query->cpu_freq.cpu_num);
-			ret = -EINVAL;
+		case MSM_THERMAL_SET_CPU_MAX_FREQUENCY:
+		case MSM_THERMAL_SET_CPU_MIN_FREQUENCY:
+			if (query->cpu_freq.cpu_num >= num_possible_cpus()) {
+				pr_err("%s: Invalid CPU number: %u\n", __func__,
+					query->cpu_freq.cpu_num);
+				ret = -EINVAL;
+				goto validate_exit;
+			}
+			break;
+		default:
+			ret = -ENOTTY;
 			goto validate_exit;
-		}
-		break;
-	default:
-		ret = -ENOTTY;
-		goto validate_exit;
-		break;
+			break;
 	}
 
 validate_exit:
@@ -118,18 +118,15 @@ static long msm_thermal_ioctl_process(struct file *filep, unsigned int cmd,
 		goto process_exit;
 
 	switch (cmd) {
-	case MSM_THERMAL_SET_CPU_MAX_FREQUENCY:
-		ret = msm_thermal_set_frequency(query.cpu_freq.cpu_num,
-			query.cpu_freq.freq_req, true);
-		break;
-	case MSM_THERMAL_SET_CPU_MIN_FREQUENCY:
-		ret = msm_thermal_set_frequency(query.cpu_freq.cpu_num,
-			query.cpu_freq.freq_req, false);
-		break;
-	default:
-		ret = -ENOTTY;
-		goto process_exit;
+		case MSM_THERMAL_SET_CPU_MAX_FREQUENCY:
+			break;
+		case MSM_THERMAL_SET_CPU_MIN_FREQUENCY:
+			break;
+		default:
+			ret = -ENOTTY;
+			goto process_exit;
 	}
+
 process_exit:
 	return ret;
 }
