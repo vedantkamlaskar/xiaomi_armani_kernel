@@ -21,12 +21,12 @@
 #include <linux/msm_thermal.h>
 #include <linux/platform_device.h>
 #include <linux/of.h>
-#include <mach/cpufreq.h>
+#include <linux/cpufreq.h>
 
 /* Configuration */
 
 // temperature thresholds
-#define DEFAULT_TEMP_LIMIT	80
+#define DEFAULT_TEMP_LIMIT	50
 #define DEFAULT_SAFE_DIFF	3
 
 // frequency limits
