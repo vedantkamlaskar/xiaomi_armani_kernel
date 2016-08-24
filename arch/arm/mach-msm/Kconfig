@@ -2872,6 +2872,14 @@ config THUNDERPLUG_CONTROL
 	help
 	  This driver hotplugs cpu cores based on per-core load
 
+config MSM_HOTPLUG
+	bool "MSM hotplug driver"
+	depends on HOTPLUG_CPU
+	default n
+	help
+	  The MSM hotplug driver controls on-/offlining of additional cores based
+	  on current cpu load.
+
 config MSM_CPR
 	tristate "Use MSM CPR in S/W mode"
 	help
