@@ -54,7 +54,5 @@ void *return_address(unsigned int level)
 	else
 		return NULL;
 }
-
-#endif /* if defined(CONFIG_FRAME_POINTER) && !defined(CONFIG_ARM_UNWIND) */
-
 EXPORT_SYMBOL_GPL(return_address);
+#endif
