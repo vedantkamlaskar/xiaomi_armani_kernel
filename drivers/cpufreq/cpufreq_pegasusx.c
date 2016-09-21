@@ -39,8 +39,6 @@
 #define DEF_UP_THRESHOLD_AT_MIN_FREQ		(50)
 #define DEF_UP_THRESHOLD_DIFF			(2)
 
-#define DEF_FREQUENCY_DOWN_DIFFERENTIAL		(5)
-
 #define MAX_SAMPLING_DOWN_FACTOR		(100)
 #define DEF_SAMPLING_DOWN_FACTOR		(4)
 
@@ -64,22 +62,10 @@
  */
 #define MICRO_FREQUENCY_MIN_SAMPLE_RATE		(10000)
 #define MICRO_FREQUENCY_UP_THRESHOLD		(90)
-#define MICRO_FREQUENCY_DOWN_DIFFERENTIAL	(5)
 
 static unsigned int min_sampling_rate;
 
 static void do_dbs_timer(struct work_struct *work);
-static int cpufreq_governor_dbs(struct cpufreq_policy *policy,
-				unsigned int event);
-
-#ifndef CONFIG_CPU_FREQ_DEFAULT_GOV_PEGASUSX
-static
-#endif
-struct cpufreq_governor cpufreq_gov_pegasusx = {
-	.name		= "pegasusx",
-	.governor	= cpufreq_governor_dbs,
-	.owner		= THIS_MODULE,
-};
 
 /* Sampling types */
 enum {DBS_NORMAL_SAMPLE, DBS_SUB_SAMPLE};
@@ -117,7 +103,6 @@ static struct workqueue_struct *dbs_wq;
 static struct dbs_tuners {
 	unsigned int sampling_rate;
 	unsigned int up_threshold;
-	unsigned int down_differential;
 	unsigned int sampling_down_factor;
 	/* pegasusx tuners */
 	unsigned int freq_step;
@@ -129,7 +114,6 @@ static struct dbs_tuners {
 } dbs_tuners_ins = {
 	.up_threshold			= DEF_FREQUENCY_UP_THRESHOLD,
 	.sampling_down_factor		= DEF_SAMPLING_DOWN_FACTOR,
-	.down_differential		= DEF_FREQUENCY_DOWN_DIFFERENTIAL,
 	.freq_step			= DEF_FREQ_STEP,
 	.up_threshold_at_min_freq	= DEF_UP_THRESHOLD_AT_MIN_FREQ,
 	.freq_for_responsiveness	= FREQ_FOR_RESPONSIVENESS,
@@ -156,7 +140,6 @@ static ssize_t show_##file_name						\
 show_one(sampling_rate, sampling_rate);
 show_one(up_threshold, up_threshold);
 show_one(sampling_down_factor, sampling_down_factor);
-show_one(down_differential, down_differential);
 show_one(freq_step, freq_step);
 show_one(up_threshold_at_min_freq, up_threshold_at_min_freq);
 show_one(freq_for_responsiveness, freq_for_responsiveness);
@@ -213,21 +196,6 @@ static ssize_t store_sampling_down_factor(struct kobject *a,
 		dbs_info = &per_cpu(od_cpu_dbs_info, j);
 		dbs_info->rate_mult = 1;
 	}
-
-	return count;
-}
-
-static ssize_t store_down_differential(struct kobject *a, struct attribute *b,
-					const char *buf, size_t count)
-{
-	unsigned int input;
-	int ret;
-
-	ret = sscanf(buf, "%u", &input);
-	if (ret != 1)
-		return -EINVAL;
-
-	dbs_tuners_ins.down_differential = min(input, 100u);
 
 	return count;
 }
@@ -297,7 +265,6 @@ static ssize_t store_micro_freq_up_threshold(struct kobject *a,
 define_one_global_rw(sampling_rate);
 define_one_global_rw(up_threshold);
 define_one_global_rw(sampling_down_factor);
-define_one_global_rw(down_differential);
 define_one_global_rw(freq_step);
 define_one_global_rw(up_threshold_at_min_freq);
 define_one_global_rw(freq_for_responsiveness);
@@ -308,7 +275,6 @@ static struct attribute *dbs_attributes[] = {
 	&sampling_rate.attr,
 	&up_threshold.attr,
 	&sampling_down_factor.attr,
-	&down_differential.attr,
 	&freq_step.attr,
 	&up_threshold_at_min_freq.attr,
 	&freq_for_responsiveness.attr,
@@ -468,18 +434,14 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 	/*
 	 * The optimal frequency is the frequency that is the lowest that
 	 * can support the current CPU usage without triggering the up
-	 * policy. To be safe, we focus DOWN_DIFFERENTIAL points under
-	 * the threshold.
+	 * policy.
 	 */
 	if (max_load_freq <
-		(dbs_tuners_ins.up_threshold - dbs_tuners_ins.down_differential) *
-			policy->cur) {
+		(dbs_tuners_ins.up_threshold * policy->cur)) {
 		unsigned int freq_next;
 		unsigned int down_thres;
 
-		freq_next = max_load_freq /
-			(dbs_tuners_ins.up_threshold -
-				dbs_tuners_ins.down_differential);
+		freq_next = max_load_freq / dbs_tuners_ins.up_threshold;
 
 		/* No longer fully busy, reset rate_mult */
 		this_dbs_info->rate_mult = 1;
@@ -487,8 +449,7 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 		if (freq_next < policy->min)
 			freq_next = policy->min;
 
-		down_thres = dbs_tuners_ins.up_threshold_at_min_freq
-			- dbs_tuners_ins.down_differential;
+		down_thres = dbs_tuners_ins.up_threshold_at_min_freq;
 
 		if (freq_next < dbs_tuners_ins.freq_for_responsiveness
 			&& (max_load_freq / freq_next) > down_thres)
@@ -633,9 +594,17 @@ static int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 	return 0;
 }
 
+#ifndef CONFIG_CPU_FREQ_DEFAULT_GOV_PEGASUSX
+static
+#endif
+struct cpufreq_governor cpufreq_gov_pegasusx = {
+	.name		= "pegasusx",
+	.governor	= cpufreq_governor_dbs,
+	.owner		= THIS_MODULE,
+};
+
 static int __init cpufreq_gov_dbs_init(void)
 {
-	u64 wall;
 	u64 idle_time;
 	int cpu = get_cpu();
 	int ret;
@@ -645,8 +614,6 @@ static int __init cpufreq_gov_dbs_init(void)
 	if (idle_time != -1ULL) {
 		/* Idle micro accounting is supported. Use finer thresholds */
 		dbs_tuners_ins.up_threshold = dbs_tuners_ins.micro_freq_up_threshold;
-		dbs_tuners_ins.down_differential =
-					MICRO_FREQUENCY_DOWN_DIFFERENTIAL;
 		/*
 		 * In no_hz/micro accounting case we set the minimum frequency
 		 * not depending on HZ, but fixed (very low). The deferred
