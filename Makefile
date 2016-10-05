@@ -153,11 +153,6 @@ objtree		:= $(CURDIR)
 src		:= $(srctree)
 obj		:= $(objtree)
 
-GRAPHITE	:= -fgraphite -fgraphite-identity \
-		   -floop-flatten -floop-parallelize-all \
-		   -ftree-loop-linear -floop-interchange \
-		   -floop-strip-mine -floop-block
-
 VPATH		:= $(srctree)$(if $(KBUILD_EXTMOD),:$(KBUILD_EXTMOD))
 
 export srctree objtree VPATH
@@ -250,8 +245,8 @@ CONFIG_SHELL := $(shell if [ -x "$$BASH" ]; then echo $$BASH; \
 
 HOSTCC       = $(CCACHE) gcc
 HOSTCXX      = $(CCACHE) g++
-HOSTCFLAGS   = -Wall -Wmissing-prototypes -Wstrict-prototypes -O3 -fno-tree-vectorize -fomit-frame-pointer -fgcse-las $(GRAPHITE) -std=gnu89
-HOSTCXXFLAGS = -O3 -fno-tree-vectorize -fgcse-las $(GRAPHITE)
+HOSTCFLAGS   = -Wall -Wmissing-prototypes -Wstrict-prototypes -O3 -fno-tree-vectorize -fomit-frame-pointer -fgcse-las -std=gnu89
+HOSTCXXFLAGS = -O3 -fno-tree-vectorize -fgcse-las
 
 # Decide whether to build built-in, modular, or both.
 # Normally, just do built-in.
@@ -334,8 +329,8 @@ include $(srctree)/scripts/Kbuild.include
 
 AS		= $(CROSS_COMPILE)as
 LD		= $(CROSS_COMPILE)ld
-CC		= $(CCACHE) $(CROSS_COMPILE)gcc $(GRAPHITE)
-CPP		= $(CC) -E $(GRAPHITE)
+CC		= $(CCACHE) $(CROSS_COMPILE)gcc
+CPP		= $(CC) -E
 AR		= $(CROSS_COMPILE)ar
 NM		= $(CROSS_COMPILE)nm
 STRIP		= $(CROSS_COMPILE)strip
@@ -356,8 +351,7 @@ KERNELFLAGS	= -O3 -munaligned-access -fgcse-lm -fgcse-sm -fsched-spec-load \
 		  -fforce-addr -fsingle-precision-constant \
 		  -mcpu=cortex-a7 -mtune=cortex-a7 -marm -mfpu=neon-vfpv4 \
 		  -ftree-vectorize -mvectorize-with-neon-quad \
-		  -funsafe-math-optimizations -std=gnu89 \
-		  $(GRAPHITE)
+		  -funsafe-math-optimizations -std=gnu89
 MODFLAGS	= -DMODULE $(KERNELFLAGS)
 CFLAGS_MODULE   = $(MODFLAGS)
 AFLAGS_MODULE   = $(MODFLAGS)
@@ -573,7 +567,7 @@ all: vmlinux
 ifdef CONFIG_CC_OPTIMIZE_FOR_SIZE
 KBUILD_CFLAGS	+= -Os $(call cc-disable-warning,maybe-uninitialized,)
 else
-KBUILD_CFLAGS	+= -O3 -g0 -fno-tree-vectorize $(GRAPHITE) $(call cc-disable-warning,maybe-uninitialized,)
+KBUILD_CFLAGS	+= -O3 -g0 -fno-tree-vectorize $(call cc-disable-warning,maybe-uninitialized,)
 endif
 
 # Tell gcc to never replace conditional load with a non-conditional one
