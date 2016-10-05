@@ -1355,8 +1355,7 @@ static int cpufreq_governor_yankactive(struct cpufreq_policy *policy,
 
 		freq_table =
 			cpufreq_frequency_get_table(cpu);
-		if (!hispeed_freq)
-			hispeed_freq = DEFAULT_HISPEED_FREQ;
+
 		freq_calc_thresh = policy->cpuinfo.min_freq;
 
 		for_each_cpu(j, policy->cpus) {
