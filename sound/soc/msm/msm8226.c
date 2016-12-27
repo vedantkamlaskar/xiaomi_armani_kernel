@@ -18,6 +18,7 @@
 #include <linux/slab.h>
 #include <linux/mfd/pm8xxx/pm8921.h>
 #include <linux/io.h>
+#include <linux/of.h>
 #include <sound/core.h>
 #include <sound/soc.h>
 #include <sound/soc-dapm.h>
@@ -78,6 +79,13 @@ static const struct soc_enum msm8226_auxpcm_enum[] = {
 
 #define I2S_PCM_SEL 1
 #define I2S_PCM_SEL_OFFSET 1
+
+static int mbhc_disabled = 0;
+
+int is_mbhc_disabled(void)
+{
+	return mbhc_disabled;
+}
 
 void *def_tapan_mbhc_cal(void);
 static int msm_snd_enable_codec_ext_clk(struct snd_soc_codec *codec, int enable,
@@ -2327,6 +2335,16 @@ static __devinit int msm8226_asoc_machine_probe(struct platform_device *pdev)
 
 	mbhc_cfg.gpio_level_insert = of_property_read_bool(pdev->dev.of_node,
 					"qcom,headset-jack-type-NC");
+
+	/* check if mbhc is used or not */
+	ret = of_property_read_u32(pdev->dev.of_node, "qcom,mbhc-disabled", &mbhc_disabled);
+	if (ret) {
+		dev_err(&pdev->dev, "Looking up %s property failed..set mbhc_disabled\n",
+			"qcom,mbhc-disabled");
+		mbhc_disabled = 0;
+	}
+
+	dev_info(&pdev->dev,"%s() MBHC disabled = %d\n", __func__, mbhc_disabled);
 
 	ret = of_property_read_string(pdev->dev.of_node,
 		"qcom,mbhc-audio-jack-type", &mbhc_audio_jack_type);

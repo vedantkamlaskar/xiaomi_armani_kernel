@@ -85,4 +85,5 @@ extern void tapan_event_register(
 	int (*machine_event_cb)(struct snd_soc_codec *codec,
 				 enum wcd9xxx_codec_event),
 	struct snd_soc_codec *codec);
+extern int is_mbhc_disabled(void);
 #endif
